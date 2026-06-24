@@ -1,0 +1,9 @@
+{
+  "name": "Neural Clicker",
+  "short_name": "Clicker",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "background_color": "#000000",
+  "theme_color": "#00ff88",
+  "description": "Wearable presentation controller for slide navigation."
+}
