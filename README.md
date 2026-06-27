@@ -1,131 +1,151 @@
-# Neural Clicker
+# Neural Clicker v4 — Clicker + Presenter Notes
 
-Neural Clicker is a prototype wearable presentation controller for Meta Ray-Ban Display-style web apps.
+Neural Clicker is a Meta Ray-Ban Display web app that sends presentation commands to a Windows PC and displays private PowerPoint speaker notes on the glasses.
 
-Flow:
+## Flow
 
 ```text
 Glasses web app
-   -> Google Apps Script relay
-      -> PC listener
-         -> simulated keyboard press
-            -> PowerPoint advances slides
+  → Google Apps Script relay
+  → Windows Python listener
+  → PowerPoint key press + speaker notes extraction
+  → relay
+  → glasses notes display
 ```
 
 ## Files
 
 ```text
-index.html                  Glasses web app
-styles.css                  Glasses UI styling
-app.js                      Glasses command sender
-neural-clicker-relay.gs     Google Apps Script relay
-pc_listener.py              PC listener that simulates keyboard presses
-requirements.txt            Python dependencies
-build_windows.bat           Windows executable build helper
-manifest.json               Web app metadata
+index.html
+styles.css
+app.js
+manifest.json
+neural-clicker-relay.gs
+pc_listener.py
+requirements.txt
+build_windows.bat
+run_listener.bat
+README.md
 ```
 
-## Step 1: Create the Google Apps Script relay
+## Glasses controls
 
-1. Go to `https://script.google.com`.
-2. Create a new project called `Neural Clicker Relay`.
+```text
+Swipe right  → right arrow
+Swipe left   → left arrow
+Swipe up     → up arrow
+Swipe down   → down arrow
+Pinch / tap  → enter
+```
+
+The same commands can be tested on desktop with the keyboard arrows and Enter.
+
+## Step 1 — Google Apps Script relay
+
+1. Go to https://script.google.com
+2. Create a new Apps Script project.
 3. Paste the contents of `neural-clicker-relay.gs`.
-4. Change:
+4. Save.
+5. Deploy → New deployment → Web app.
+6. Use:
+   - Execute as: Me
+   - Who has access: Anyone
+7. Deploy and copy the `/exec` URL.
 
-```javascript
-const SECRET = "CHANGE_THIS_TO_A_RANDOM_PASSWORD";
+This package is already configured to use:
+
+```text
+https://script.google.com/macros/s/AKfycbygAUPBWXLHzGrDYgAieiJo4cm1EpNrtBPXPxB-LukptS75zxz4irol-js6QGh3x5nUdw/exec
 ```
 
-Use the same value later in `app.js` and `pc_listener.py`.
+and the shared secret:
 
-5. Deploy as a Web App:
-   - Execute as: `Me`
-   - Who has access: `Anyone`
-6. Copy the Web App URL ending in `/exec`.
-
-## Step 2: Configure the glasses web app
-
-In `app.js`, set:
-
-```javascript
-const RELAY_ENDPOINT = "https://script.google.com/macros/s/AKfycbygAUPBWXLHzGrDYgAieiJo4cm1EpNrtBPXPxB-LukptS75zxz4irol-js6QGh3x5nUdw/exec";
-const RELAY_SECRET = "YOUR_SECRET";
+```text
+CHANGE_THIS_TO_A_RANDOM_PASSWORD
 ```
 
-Then upload `index.html`, `styles.css`, `app.js`, and `manifest.json` to your hosting/GitHub Pages.
+If you change either one, update both `app.js` and `pc_listener.py`.
 
-## Step 3: Configure the PC listener
+## Step 2 — Host the glasses app
 
-On the presentation PC, install Python.
+Upload these files to GitHub Pages or another HTTPS host:
 
-Then edit `pc_listener.py`:
-
-```python
-RELAY_URL = "https://script.google.com/macros/s/AKfycbygAUPBWXLHzGrDYgAieiJo4cm1EpNrtBPXPxB-LukptS75zxz4irol-js6QGh3x5nUdw/exec"
-SECRET = "YOUR_SECRET"
+```text
+index.html
+styles.css
+app.js
+manifest.json
 ```
 
-Install dependencies:
+Connect the resulting URL as a Meta Ray-Ban Display web app.
 
-```bash
-pip install requests pyautogui
+## Step 3 — Run the Windows listener
+
+For quick testing, run:
+
+```text
+run_listener.bat
 ```
 
-Run:
+For an executable, run:
 
-```bash
-python pc_listener.py
-```
-
-Open PowerPoint in slide-show mode and keep it focused.
-
-## Step 4: Optional Windows executable
-
-From the project folder:
-
-```bat
+```text
 build_windows.bat
 ```
 
-The executable will appear in:
+The executable will be created at:
 
 ```text
 dist\NeuralClickerListener.exe
 ```
 
-## Controls
+## PowerPoint setup
 
-Glasses:
+No special PowerPoint plugin is needed.
+
+Use Windows desktop PowerPoint:
+
+1. Open your presentation in PowerPoint.
+2. Start slideshow mode.
+3. Run `pc_listener.py` or `NeuralClickerListener.exe`.
+4. Open Neural Clicker on the glasses.
+
+The listener reads the active slideshow through Windows COM automation and publishes the current slide speaker notes to the glasses.
+
+## Notes sync behavior
+
+The listener does not merely count clicks. It repeatedly checks PowerPoint for the currently displayed slide. This helps preserve sync if you:
+
+- start on a later slide,
+- jump to another slide,
+- use the keyboard/mouse,
+- or navigate with the glasses.
+
+## Troubleshooting
+
+### Commands work but notes do not appear
+
+Make sure:
+
+- Desktop PowerPoint is running.
+- Slideshow mode is active.
+- The listener is running on the same Windows user session.
+- `pywin32` installed successfully.
+
+### Listener cannot read PowerPoint
+
+Try running:
 
 ```text
-Swipe right  -> right arrow
-Swipe left   -> left arrow
-Swipe up     -> up arrow
-Swipe down   -> down arrow
-Pinch        -> Enter
+python pc_listener.py
 ```
 
-Desktop test mode:
+instead of the compiled EXE first. The console output will show whether PowerPoint is visible.
 
-```text
-Keyboard arrow keys -> arrow commands
-Enter / Space       -> Enter command
-```
+### Glasses show old notes
 
-## Latency note
-
-This polling-based prototype checks for commands every 0.2 seconds. For presentations this should feel acceptable, but it is not intended for games or low-latency applications.
+Reload the web app and restart the listener. Apps Script stores the latest notes state until a new one is published.
 
 ## Security note
 
-The shared secret is a lightweight barrier, not full authentication. For a polished product, use a proper backend relay with authenticated sessions.
-
-## Windows build note
-
-The build script now uses:
-
-```bat
-python -m PyInstaller --onefile --name NeuralClickerListener pc_listener.py
-```
-
-This avoids the common Windows issue where `pyinstaller` is installed but is not available on the PATH.
+This is a prototype relay. The shared secret is embedded in the web app and is not strong security. For production, use a real backend with authenticated users and short-lived tokens.

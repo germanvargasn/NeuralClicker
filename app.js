@@ -1,191 +1,158 @@
-/* Neural Clicker
-   Glasses web app -> Google Apps Script relay -> PC listener -> PowerPoint key press
-*/
+/* Neural Clicker + Presenter Notes
+ * Glasses web app.
+ * Sends click commands to Apps Script and polls current PowerPoint notes via JSONP.
+ */
 
-// ==============================
-// Configuration
-// ==============================
+const RELAY_URL = "https://script.google.com/macros/s/AKfycbygAUPBWXLHzGrDYgAieiJo4cm1EpNrtBPXPxB-LukptS75zxz4irol-js6QGh3x5nUdw/exec";
+const SHARED_SECRET = "CHANGE_THIS_TO_A_RANDOM_PASSWORD";
 
-// Paste your deployed Google Apps Script /exec URL here.
-const RELAY_ENDPOINT = "https://script.google.com/macros/s/AKfycbygAUPBWXLHzGrDYgAieiJo4cm1EpNrtBPXPxB-LukptS75zxz4irol-js6QGh3x5nUdw/exec";
-
-// Must match SECRET in neural-clicker-relay.gs and pc_listener.py.
-const RELAY_SECRET = "CHANGE_THIS_TO_A_RANDOM_PASSWORD";
-
-// Optional: useful if you deploy multiple clickers.
-const DEVICE_NAME = "neural-clicker-01";
-
-// Minimum time between commands to avoid accidental double-fire.
-const COMMAND_COOLDOWN_MS = 220;
-
-// Touch swipe threshold in pixels for desktop/mobile testing.
+const COMMAND_FLASH_MS = 180;
+const NOTES_POLL_MS = 900;
 const SWIPE_THRESHOLD_PX = 35;
 
-// Visual flash duration.
-const FLASH_MS = 150;
-
-// ==============================
-// DOM references
-// ==============================
-
-const permissionScreen = document.getElementById("permissionScreen");
-const clickerScreen = document.getElementById("clickerScreen");
-const startButton = document.getElementById("startButton");
-const statusText = document.getElementById("statusText");
-
-const controls = {
-  up: document.getElementById("upArrow"),
-  down: document.getElementById("downArrow"),
-  left: document.getElementById("leftArrow"),
-  right: document.getElementById("rightArrow"),
-  enter: document.getElementById("centerButton")
+const elements = {
+  up: document.getElementById("arrowUp"),
+  down: document.getElementById("arrowDown"),
+  left: document.getElementById("arrowLeft"),
+  right: document.getElementById("arrowRight"),
+  enter: document.getElementById("centerClick"),
+  status: document.getElementById("statusText"),
+  slideLabel: document.getElementById("slideLabel"),
+  notesText: document.getElementById("notesText"),
 };
 
-let started = false;
-let lastCommandAt = 0;
 let touchStartX = null;
 let touchStartY = null;
-let lastSentCommand = null;
-let lastSentId = 0;
+let lastNotesVersion = null;
+let jsonpCounter = 0;
 
-// ==============================
-// App lifecycle
-// ==============================
-
-function startApp() {
-  started = true;
-  permissionScreen.classList.remove("active");
-  clickerScreen.classList.add("active");
-  setStatus("READY");
+function setStatus(text) {
+  elements.status.textContent = text;
 }
 
-startButton.addEventListener("click", startApp);
+function flash(command) {
+  const el = elements[command];
+  if (!el) return;
+  el.classList.add("active");
+  window.setTimeout(() => el.classList.remove("active"), COMMAND_FLASH_MS);
+}
 
-// Pinch/Enter starts from the first screen.
-document.addEventListener("keydown", (e) => {
-  if (!started && (e.key === "Enter" || e.key === " ")) {
-    e.preventDefault();
-    startApp();
-    return;
+function makeCommandId() {
+  return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function sendCommand(command) {
+  flash(command);
+  setStatus(`Sent: ${command.toUpperCase()}`);
+
+  const payload = {
+    secret: SHARED_SECRET,
+    type: "command",
+    command,
+    commandId: makeCommandId(),
+    sentAt: new Date().toISOString(),
+  };
+
+  try {
+    fetch(RELAY_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    }).catch(() => {
+      setStatus("Relay send failed");
+    });
+  } catch (err) {
+    setStatus("Relay unavailable");
   }
+}
 
-  if (!started) return;
+function handleKey(event) {
+  const key = event.key;
+  if (key === "ArrowRight") sendCommand("right");
+  else if (key === "ArrowLeft") sendCommand("left");
+  else if (key === "ArrowUp") sendCommand("up");
+  else if (key === "ArrowDown") sendCommand("down");
+  else if (key === "Enter" || key === " ") sendCommand("enter");
+}
 
-  if (e.key === "ArrowRight") {
-    e.preventDefault();
-    triggerCommand("right");
-  } else if (e.key === "ArrowLeft") {
-    e.preventDefault();
-    triggerCommand("left");
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    triggerCommand("up");
-  } else if (e.key === "ArrowDown") {
-    e.preventDefault();
-    triggerCommand("down");
-  } else if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    triggerCommand("enter");
-  }
-});
+function handlePointerDown(event) {
+  touchStartX = event.clientX;
+  touchStartY = event.clientY;
+}
 
-// Touch/mouse swipe fallback for browser testing.
-document.addEventListener("touchstart", (e) => {
-  if (!started) return;
-  const t = e.changedTouches[0];
-  touchStartX = t.clientX;
-  touchStartY = t.clientY;
-}, { passive: true });
+function handlePointerUp(event) {
+  if (touchStartX === null || touchStartY === null) return;
 
-document.addEventListener("touchend", (e) => {
-  if (!started || touchStartX === null || touchStartY === null) return;
-  const t = e.changedTouches[0];
-  const dx = t.clientX - touchStartX;
-  const dy = t.clientY - touchStartY;
+  const dx = event.clientX - touchStartX;
+  const dy = event.clientY - touchStartY;
   touchStartX = null;
   touchStartY = null;
 
   if (Math.abs(dx) < SWIPE_THRESHOLD_PX && Math.abs(dy) < SWIPE_THRESHOLD_PX) {
-    triggerCommand("enter");
+    sendCommand("enter");
     return;
   }
 
   if (Math.abs(dx) > Math.abs(dy)) {
-    triggerCommand(dx > 0 ? "right" : "left");
+    sendCommand(dx > 0 ? "right" : "left");
   } else {
-    triggerCommand(dy > 0 ? "down" : "up");
+    sendCommand(dy > 0 ? "down" : "up");
   }
-}, { passive: true });
-
-// Pointer fallback for desktop click/tap on controls.
-for (const [command, el] of Object.entries(controls)) {
-  el.addEventListener("click", () => {
-    if (started) triggerCommand(command);
-  });
 }
 
-// ==============================
-// Command handling
-// ==============================
+function pollNotes() {
+  const callbackName = `neuralClickerNotes_${Date.now()}_${jsonpCounter++}`;
+  const script = document.createElement("script");
+  const url = new URL(RELAY_URL);
 
-function triggerCommand(command) {
-  const now = Date.now();
-  if (now - lastCommandAt < COMMAND_COOLDOWN_MS) return;
-  lastCommandAt = now;
+  url.searchParams.set("action", "status");
+  url.searchParams.set("secret", SHARED_SECRET);
+  url.searchParams.set("callback", callbackName);
+  url.searchParams.set("_", String(Date.now()));
 
-  lastSentId += 1;
-  const commandId = `${DEVICE_NAME}-${now}-${lastSentId}`;
-  lastSentCommand = command;
+  window[callbackName] = function(data) {
+    try {
+      updateNotes(data);
+    } finally {
+      delete window[callbackName];
+      script.remove();
+    }
+  };
 
-  flashControl(command);
-  setStatus(command.toUpperCase());
-  sendCommand(command, commandId);
+  script.onerror = function() {
+    delete window[callbackName];
+    script.remove();
+    setStatus("Notes relay unavailable");
+  };
+
+  script.src = url.toString();
+  document.body.appendChild(script);
 }
 
-function flashControl(command, isError = false) {
-  const el = controls[command];
-  if (!el) return;
-  el.classList.remove("flash", "error");
-  void el.offsetWidth;
-  el.classList.add(isError ? "error" : "flash");
-  setTimeout(() => el.classList.remove("flash", "error"), FLASH_MS);
-}
-
-function setStatus(text) {
-  statusText.textContent = text;
-}
-
-async function sendCommand(command, commandId) {
-  if (!RELAY_ENDPOINT || RELAY_ENDPOINT.includes("PASTE_YOUR")) {
-    setStatus("NO ENDPOINT");
-    flashControl(command, true);
+function updateNotes(data) {
+  if (!data || data.ok === false) {
+    elements.slideLabel.textContent = "Waiting for PowerPoint…";
+    elements.notesText.textContent = data && data.message ? data.message : "No notes available.";
     return;
   }
 
-  const payload = {
-    secret: RELAY_SECRET,
-    device: DEVICE_NAME,
-    command,
-    commandId,
-    timestamp: new Date().toISOString()
-  };
+  if (data.version === lastNotesVersion) return;
+  lastNotesVersion = data.version;
 
-  try {
-    // no-cors keeps this compatible with simple Apps Script deployments.
-    // The glasses app will not be able to read the response, but the command is sent.
-    await fetch(RELAY_ENDPOINT, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
-    });
+  const slideIndex = data.slideIndex || "—";
+  const slideCount = data.slideCount || "—";
+  const title = data.slideTitle ? ` · ${data.slideTitle}` : "";
+  elements.slideLabel.textContent = `Slide ${slideIndex} / ${slideCount}${title}`;
 
-    setTimeout(() => {
-      if (lastSentCommand === command) setStatus("READY");
-    }, 260);
-  } catch (err) {
-    console.error("Command send failed", err);
-    setStatus("SEND ERROR");
-    flashControl(command, true);
-  }
+  const notes = String(data.notes || "").trim();
+  elements.notesText.textContent = notes || "No speaker notes for this slide.";
+  setStatus(data.source || "Notes updated");
 }
+
+window.addEventListener("keydown", handleKey);
+window.addEventListener("pointerdown", handlePointerDown);
+window.addEventListener("pointerup", handlePointerUp);
+
+setInterval(pollNotes, NOTES_POLL_MS);
+pollNotes();
