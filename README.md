@@ -48,7 +48,7 @@ Use the same value later in `app.js` and `pc_listener.py`.
 In `app.js`, set:
 
 ```javascript
-const RELAY_ENDPOINT = "YOUR_APPS_SCRIPT_EXEC_URL";
+const RELAY_ENDPOINT = "https://script.google.com/macros/s/AKfycbygAUPBWXLHzGrDYgAieiJo4cm1EpNrtBPXPxB-LukptS75zxz4irol-js6QGh3x5nUdw/exec";
 const RELAY_SECRET = "YOUR_SECRET";
 ```
 
@@ -61,7 +61,7 @@ On the presentation PC, install Python.
 Then edit `pc_listener.py`:
 
 ```python
-RELAY_URL = "YOUR_APPS_SCRIPT_EXEC_URL"
+RELAY_URL = "https://script.google.com/macros/s/AKfycbygAUPBWXLHzGrDYgAieiJo4cm1EpNrtBPXPxB-LukptS75zxz4irol-js6QGh3x5nUdw/exec"
 SECRET = "YOUR_SECRET"
 ```
 
@@ -119,3 +119,13 @@ This polling-based prototype checks for commands every 0.2 seconds. For presenta
 ## Security note
 
 The shared secret is a lightweight barrier, not full authentication. For a polished product, use a proper backend relay with authenticated sessions.
+
+## Windows build note
+
+The build script now uses:
+
+```bat
+python -m PyInstaller --onefile --name NeuralClickerListener pc_listener.py
+```
+
+This avoids the common Windows issue where `pyinstaller` is installed but is not available on the PATH.

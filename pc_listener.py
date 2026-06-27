@@ -22,7 +22,7 @@ import pyautogui
 # Configuration
 # ==============================
 
-RELAY_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE"
+RELAY_URL = "https://script.google.com/macros/s/AKfycbygAUPBWXLHzGrDYgAieiJo4cm1EpNrtBPXPxB-LukptS75zxz4irol-js6QGh3x5nUdw/exec"
 SECRET = "CHANGE_THIS_TO_A_RANDOM_PASSWORD"
 POLL_SECONDS = 0.20
 REQUEST_TIMEOUT_SECONDS = 5

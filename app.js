@@ -7,7 +7,7 @@
 // ==============================
 
 // Paste your deployed Google Apps Script /exec URL here.
-const RELAY_ENDPOINT = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
+const RELAY_ENDPOINT = "https://script.google.com/macros/s/AKfycbygAUPBWXLHzGrDYgAieiJo4cm1EpNrtBPXPxB-LukptS75zxz4irol-js6QGh3x5nUdw/exec";
 
 // Must match SECRET in neural-clicker-relay.gs and pc_listener.py.
 const RELAY_SECRET = "CHANGE_THIS_TO_A_RANDOM_PASSWORD";
